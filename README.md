@@ -83,3 +83,22 @@ You should see something like:
 ```
 
 Open the **HTML file path** in a browser on the bastion, or copy that file to your workstation. The exact filename depends on the cluster ID Pen-drive reports.
+
+
+### In-cluster help flags:
+
+```bash
+
+options:
+  -h, --help            show this help message and exit
+  --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
+                        Logging level (default: INFO)
+  --cluster-url CLUSTER_URL
+                        OpenShift cluster API URL (e.g., https://api.your-cluster.com:6443). To find it, run 'oc whoami --show-server' command
+  --insecure-skip-tls-verify [[true|false]]
+                        Skip TLS certificate verification. Use alone to enable, or specify =true or =false
+  --debug-rule DEBUG_RULE
+                        Run specific rule in debug mode with full command output (no secret filtering). Specify rule unique name (e.g., 'ovs_interface_and_port_managed_by_network_manager') or title
+                        (e.g., 'Verify that ovs interface and port are managed by network manager')
+  --format {json,html}  Output format: json or html (default: html)
+  ```
