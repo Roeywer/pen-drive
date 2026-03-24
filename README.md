@@ -50,6 +50,13 @@ podman tag <image-id-or-local-name> \
 
 ### 3. Run the scanner
 
+The script will prompt you for:
+
+- The **cluster API URL** (HTTPS, for example `https://api.<cluster>.<domain>:6443`).
+- The **path to the cluster CA certificate** (CA file used to verify the API).
+
+After the container is running, **Pen-drive** will prompt for a **privileged username and password** so it can authenticate to the cluster API and run the in-cluster tests. Use credentials that meet your organization’s policy (for example a user or service account with the permissions Pen-drive needs).
+
 From this repository:
 
 ```bash
