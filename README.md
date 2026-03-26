@@ -41,6 +41,13 @@ Load the image:
 podman load -i pen-drive-scanner-rhel9-0.1.tar
 ```
 
+Optionally, get the cluster CA certificate directly from the cluster:
+
+```bash
+# Download the CA certificate
+oc get configmap user-ca-bundle -n openshift-config -o jsonpath='{.data.ca-bundle\.crt}' > ca.crt
+```
+
 If `podman images` shows a **different** name (for example `localhost/...`), retag so it matches what the script expects:
 
 ```bash
