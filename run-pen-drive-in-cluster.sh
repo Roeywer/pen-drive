@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Run Red Hat pen-drive scanner in-cluster check via Podman.
+# Run Red Hat Pen Drive scanner via Podman (gather, full-run, or in-cluster-check).
 # Requires: podman; registry.redhat.io auth for the pen-drive image.
-# On macOS, rootless Podman and --userns=keep-id may differ from Linux.
 
 set -euo pipefail
 
@@ -15,6 +14,21 @@ printf '\n'
 printf '%s──────────────────────────────────────────────────────%s\n'
 printf '%s  Welcome to Pen Drive Openshift cluster system tests%s\n'
 printf '%s──────────────────────────────────────────────────────%s\n'
+printf '\n'
+
+printf 'Select workflow (use number keys, then Enter):\n'
+printf '  gather            — collect must-gather data from the cluster\n'
+printf '  full-run          — lightweight must-gather + Lightspeed scan + in-cluster rules\n'
+printf '  in-cluster-check  — lightest: direct checks on nodes (no must-gather)\n'
+printf '\n'
+PS3='Scan type (1-3): '
+scan_types=(gather full-run in-cluster-check)
+select SCAN_TYPE in "${scan_types[@]}"; do
+  case "$SCAN_TYPE" in
+    gather|full-run|in-cluster-check) break ;;
+    *) echo "Invalid choice; enter 1, 2, or 3." >&2 ;;
+  esac
+done
 printf '\n'
 
 read -r -p "Please enter the cluster API URL (e.g. https://api.cluster.example.com:6443): " CLUSTER_URL
@@ -83,31 +97,74 @@ find_latest_html_under() {
   printf '%s\n' "$latest"
 }
 
-rc=0
-podman run --rm -it \
-  --userns=keep-id --user="$(id -u):$(id -g)" \
-  -v "${MG_DIR}:/mg:Z" \
-  -e "CLUSTER_URL=${CLUSTER_URL}" \
-  -v "${CLUSTER_CA_ABS}:/opt/app-root/.kube/ca.crt:Z,ro" \
-  --tz=local \
-  "$IMAGE" \
-  in-cluster-check || rc=$?
+run_pen_drive() {
+  podman run --rm -it \
+    --userns=keep-id --user="$(id -u):$(id -g)" \
+    -v "${MG_DIR}:/mg:Z" \
+    -e "CLUSTER_URL=${CLUSTER_URL}" \
+    -v "${CLUSTER_CA_ABS}:/opt/app-root/.kube/ca.crt:Z,ro" \
+    --tz=local \
+    "$IMAGE" \
+    "$@"
+}
 
-latest_html="$(find_latest_html_under "$MG_DIR")"
+prompt_keep_must_gather() {
+  local reply
+  while true; do
+    read -r -p "Save must-gather data after full-run completes? [Y/n]: " reply
+    reply="${reply//[[:space:]]/}"
+    if [[ -z "$reply" ]]; then
+      printf '%s\n' true
+      return
+    fi
+    case "${reply:0:1}" in
+      [yY]|[tT]) printf '%s\n' true; return ;;
+      [nN]|[fF]) printf '%s\n' false; return ;;
+      *) echo "Please answer y (save) or n (discard)." >&2 ;;
+    esac
+  done
+}
+
+rc=0
+case "$SCAN_TYPE" in
+  gather)
+    run_pen_drive gather || rc=$?
+    ;;
+  full-run)
+    # --keep-must-gather-data is required for full-run (see Pen Drive user guide).
+    KEEP_MUST_GATHER="$(prompt_keep_must_gather)"
+    run_pen_drive full-run --keep-must-gather-data="${KEEP_MUST_GATHER}" || rc=$?
+    ;;
+  in-cluster-check)
+    run_pen_drive in-cluster-check || rc=$?
+    ;;
+esac
+
 if [[ -t 1 ]]; then
   _c_green=$(tput setaf 2 2>/dev/null) || _c_green='\033[0;32m'
   _c_reset=$(tput sgr0 2>/dev/null) || _c_reset='\033[0m'
 else
   _c_green= _c_reset=
 fi
-if [[ -n "$latest_html" ]]; then
+
+if [[ "$SCAN_TYPE" == gather ]]; then
   printf '\n'
   printf '%s────────────────────────────────────────%s\n' "$_c_green" "$_c_reset"
-  printf '%s  Check the latest HTML report%s\n' "$_c_green" "$_c_reset"
+  printf '%s  gather complete — output under%s\n' "$_c_green" "$_c_reset"
   printf '%s────────────────────────────────────────%s\n' "$_c_green" "$_c_reset"
-  printf '\n  %s\n\n' "$latest_html"
+  printf '\n  %s\n' "$MG_DIR"
+  printf '  (look for pendrive-* and must-gather-* folders per workflow docs.)\n\n'
 else
-  printf '\nNo HTML report found under %s\n' "$MG_DIR" >&2
+  latest_html="$(find_latest_html_under "$MG_DIR")"
+  if [[ -n "$latest_html" ]]; then
+    printf '\n'
+    printf '%s────────────────────────────────────────%s\n' "$_c_green" "$_c_reset"
+    printf '%s  Check the latest HTML report%s\n' "$_c_green" "$_c_reset"
+    printf '%s────────────────────────────────────────%s\n' "$_c_green" "$_c_reset"
+    printf '\n  %s\n\n' "$latest_html"
+  else
+    printf '\nNo HTML report found under %s\n' "$MG_DIR" >&2
+  fi
 fi
 
 exit "$rc"
